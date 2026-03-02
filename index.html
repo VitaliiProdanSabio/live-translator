@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Translation Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; }
+
+    /* Overlay base */
+    .overlay {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55); z-index: 100;
+    }
+    .overlay-box {
+      background: #fff; border-radius: 12px;
+      padding: 40px 36px; width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+    .overlay-box h2 { margin-bottom: 6px; font-size: 1.4rem; }
+    .overlay-box p  { color: #666; margin-bottom: 20px; font-size: 0.9rem; }
+    .overlay-box label { display: block; font-size: 0.8rem; font-weight: bold; color: #444; margin: 12px 0 4px; }
+    .overlay-box input {
+      width: 100%; padding: 9px 12px; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.95rem; outline: none;
+    }
+    .overlay-box input:focus { border-color: #1976d2; }
+    .btn-primary {
+      margin-top: 20px; width: 100%; padding: 10px;
+      background: #1976d2; color: #fff; border: none;
+      border-radius: 6px; font-size: 1rem; cursor: pointer;
+    }
+    .btn-primary:hover { background: #1565c0; }
+    .error-msg { color: #d32f2f; font-size: 0.85rem; margin-top: 8px; min-height: 18px; }
+    .hint { color: #888; font-size: 0.78rem; margin-top: 10px; }
+
+    /* Main app */
+    #app {
+      max-width: 620px; margin: 40px auto; padding: 24px;
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    #app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    #app-header h1 { font-size: 1.5rem; }
+    #settings-btn {
+      background: none; border: 1px solid #ccc; border-radius: 6px;
+      padding: 5px 10px; cursor: pointer; font-size: 0.85rem; color: #555;
+    }
+    #settings-btn:hover { border-color: #1976d2; color: #1976d2; }
+
+    .form-row { margin-bottom: 14px; }
+    .form-row label { font-weight: bold; display: block; margin-bottom: 4px; font-size: 0.9rem; }
+    select { padding: 7px; font-size: 15px; border: 1px solid #ccc; border-radius: 6px; }
+
+    .controls { display: flex; gap: 10px; margin: 14px 0; }
+    .controls button {
+      padding: 9px 18px; font-size: 0.95rem; cursor: pointer;
+      border: 1px solid #ccc; border-radius: 6px; background: #fff;
+    }
+    .controls button:hover:not(:disabled) { border-color: #1976d2; color: #1976d2; }
+    .controls button:disabled { opacity: 0.45; cursor: not-allowed; }
+    #btn-connect { background: #1976d2; color: #fff; border-color: #1976d2; }
+    #btn-connect:hover:not(:disabled) { background: #1565c0; color: #fff; }
+
+    #status {
+      padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; font-weight: bold;
+      background: #fafafa; border: 1px solid #e0e0e0; color: #555; display: inline-block;
+      margin-bottom: 14px;
+    }
+    #status.connected    { background: #e8f5e9; border-color: #81c784; color: #2e7d32; }
+    #status.disconnected { background: #fafafa; border-color: #e0e0e0; color: #555; }
+
+    #log {
+      padding: 10px; background: #fafafa; border: 1px solid #e8e8e8;
+      border-radius: 6px; max-height: 300px; overflow-y: auto;
+      font-family: monospace; font-size: 11px; color: #333;
+    }
+    #log div { padding: 1px 0; }
+
+    .info-box {
+      margin-top: 18px; padding: 14px 16px;
+      background: #e8f4fd; border-left: 4px solid #1976d2; border-radius: 4px;
+    }
+    .info-box strong { font-size: 0.9rem; }
+    .info-box ol { margin: 8px 0 6px 16px; font-size: 0.875rem; line-height: 1.7; }
+    .info-box p  { font-size: 0.875rem; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Password gate -->
+  <div class="overlay" id="auth-overlay">
+    <div class="overlay-box">
+      <h2>🌍 Translation Test</h2>
+      <p>Enter the access password to continue.</p>
+      <label for="auth-pass">Password</label>
+      <input type="password" id="auth-pass" placeholder="••••••••" autofocus>
+      <div class="error-msg" id="auth-error"></div>
+      <button class="btn-primary" id="auth-submit">Login</button>
+    </div>
+  </div>
+
+  <!-- 2. LiveKit config (shown once, credentials saved to localStorage) -->
+  <div class="overlay" id="cfg-overlay" style="display:none;">
+    <div class="overlay-box">
+      <h2>⚙️ LiveKit Configuration</h2>
+      <p>Enter your LiveKit Cloud credentials. They are stored in your browser only.</p>
+      <label for="cfg-url">LiveKit URL</label>
+      <input type="text"     id="cfg-url"    placeholder="wss://your-project.livekit.cloud">
+      <label for="cfg-key">API Key</label>
+      <input type="text"     id="cfg-key"    placeholder="APIxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <label for="cfg-secret">API Secret</label>
+      <input type="password" id="cfg-secret" placeholder="••••••••••••••••••••" autocomplete="off">
+      <div class="error-msg" id="cfg-error"></div>
+      <button class="btn-primary" id="cfg-save">Save &amp; Continue</button>
+      <p class="hint">Credentials are stored in <code>localStorage</code> and never sent to any server.</p>
+    </div>
+  </div>
+
+  <!-- 3. Main app -->
+  <div id="app" style="display:none;">
+    <div id="app-header">
+      <h1>🌍 Translation Test</h1>
+      <button id="settings-btn">⚙️ Settings</button>
+    </div>
+
+    <div class="form-row">
+      <label for="language">Your language:</label>
+      <select id="language">
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="it">Italian</option>
+        <option value="pt">Portuguese</option>
+        <option value="uk">Ukrainian 🇺🇦</option>
+        <option value="ru">Russian</option>
+        <option value="ja">Japanese</option>
+        <option value="ko">Korean</option>
+        <option value="zh">Chinese</option>
+      </select>
+    </div>
+
+    <div class="controls">
+      <button id="btn-connect">Connect</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+      <button id="btn-mute" disabled>🎤 Mute</button>
+    </div>
+
+    <div id="status" class="disconnected">Disconnected</div>
+    <div id="log"></div>
+
+    <div class="info-box">
+      <strong>📝 How to use</strong>
+      <ol>
+        <li>Select your language and click <strong>Connect</strong></li>
+        <li>Open this page in a second browser or tab</li>
+        <li>Select a different language and click Connect</li>
+        <li>Speak — hear the translation in the other browser</li>
+      </ol>
+      <p>Both participants join the same room: <code>translation-room</code></p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.4/dist/livekit-client.umd.min.js"></script>
+  <script>
+    // -----------------------------------------------------------------
+    // CONFIG
+    // -----------------------------------------------------------------
+    // Default password: nova-translation
+    // To change: run  echo -n "your-password" | shasum -a 256
+    // then replace the hash constant below.
+    const PASSWORD_HASH = 'e4f24c83fc67915a3965d616da782e064a9d647aad7021cec88234e92ad4eb5b';
+
+    // -----------------------------------------------------------------
+    // UTILS
+    // -----------------------------------------------------------------
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function b64url(obj) {
+      return btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    async function buildLivekitToken(apiKey, apiSecret, roomName, identity, metadata) {
+      const header  = { alg: 'HS256', typ: 'JWT' };
+      const now     = Math.floor(Date.now() / 1000);
+      const payload = {
+        iss: apiKey, sub: identity,
+        jti: crypto.randomUUID(), nbf: now, exp: now + 3600,
+        video: { roomJoin: true, room: roomName, canPublish: true, canSubscribe: true, canPublishData: true },
+        metadata,
+      };
+      const sigInput = b64url(header) + '.' + b64url(payload);
+      const key = await crypto.subtle.importKey(
+        'raw', new TextEncoder().encode(apiSecret),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(sigInput));
+      const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return sigInput + '.' + sigB64;
+    }
+
+    function getLivekitUrl() {
+      const fromParam = new URLSearchParams(window.location.search).get('livekit_url');
+      return fromParam || localStorage.getItem('lk_url') || 'wss://my-dev-7v77lj6q.livekit.cloud';
+    }
+
+    // -----------------------------------------------------------------
+    // AUTH FLOW
+    // -----------------------------------------------------------------
+    function showConfigOverlay() {
+      document.getElementById('cfg-url').value    = localStorage.getItem('lk_url')     || '';
+      document.getElementById('cfg-key').value    = localStorage.getItem('lk_api_key') || '';
+      document.getElementById('cfg-secret').value = '';
+      document.getElementById('cfg-overlay').style.display = 'flex';
+    }
+
+    function showApp() {
+      document.getElementById('auth-overlay').style.display = 'none';
+      document.getElementById('cfg-overlay').style.display  = 'none';
+      document.getElementById('app').style.display          = 'block';
+    }
+
+    function afterAuth() {
+      if (!localStorage.getItem('lk_api_key') || !localStorage.getItem('lk_api_secret')) {
+        showConfigOverlay();
+      } else {
+        showApp();
+      }
+    }
+
+    if (sessionStorage.getItem('authenticated') === 'true') { afterAuth(); }
+
+    document.getElementById('auth-pass').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('auth-submit').click();
+    });
+
+    document.getElementById('auth-submit').addEventListener('click', async () => {
+      const val = document.getElementById('auth-pass').value;
+      if (!val) return;
+      const hash = await sha256(val);
+      if (hash === PASSWORD_HASH) {
+        sessionStorage.setItem('authenticated', 'true');
+        document.getElementById('auth-overlay').style.display = 'none';
+        afterAuth();
+      } else {
+        document.getElementById('auth-error').textContent = 'Incorrect password.';
+        document.getElementById('auth-pass').value = '';
+        document.getElementById('auth-pass').focus();
+      }
+    });
+
+    document.getElementById('cfg-save').addEventListener('click', () => {
+      const url    = document.getElementById('cfg-url').value.trim();
+      const key    = document.getElementById('cfg-key').value.trim();
+      const secret = document.getElementById('cfg-secret').value.trim();
+      if (!url || !key || !secret) {
+        document.getElementById('cfg-error').textContent = 'All fields are required.';
+        return;
+      }
+      localStorage.setItem('lk_url', url);
+      localStorage.setItem('lk_api_key', key);
+      localStorage.setItem('lk_api_secret', secret);
+      showApp();
+    });
+
+    document.getElementById('settings-btn').addEventListener('click', () => {
+      showConfigOverlay();
+      document.getElementById('app').style.display = 'none';
+    });
+
+    // -----------------------------------------------------------------
+    // TRANSLATION APP
+    // -----------------------------------------------------------------
+    const LANG_NAMES = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+      pt: 'Portuguese', uk: 'Ukrainian', ru: 'Russian', ja: 'Japanese',
+      ko: 'Korean', zh: 'Chinese'
+    };
+
+    let room    = null;
+    let isMuted = false;
+
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.innerHTML += '<div>' + new Date().toLocaleTimeString() + ' ' + msg + '</div>';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function setStatus(text, cls) {
+      const el = document.getElementById('status');
+      el.textContent = text;
+      el.className   = cls;
+    }
+
+    document.getElementById('btn-connect').addEventListener('click', async () => {
+      try {
+        const language = document.getElementById('language').value;
+        log('Connecting as ' + LANG_NAMES[language] + ' speaker...');
+
+        const LK = window.LivekitClient || window.LiveKit || window.livekit;
+        if (!LK) { log('Error: LiveKit SDK not loaded'); return; }
+
+        const apiKey    = localStorage.getItem('lk_api_key');
+        const apiSecret = localStorage.getItem('lk_api_secret');
+        if (!apiKey || !apiSecret) {
+          log('Error: LiveKit credentials missing - open Settings');
+          return;
+        }
+
+        room = new LK.Room();
+        room.on('connectionStateChanged', state => log('Connection state: ' + state));
+        room.on('reconnecting', () => log('Reconnecting...'));
+        room.on('reconnected',  () => log('Reconnected'));
+
+        room.on('connected', () => {
+          log('Connected');
+          setStatus('Connected (' + LANG_NAMES[language] + ')', 'connected');
+          document.getElementById('btn-connect').disabled    = true;
+          document.getElementById('btn-disconnect').disabled = false;
+          document.getElementById('btn-mute').disabled       = false;
+        });
+
+        room.on('disconnected', () => {
+          log('Disconnected');
+          setStatus('Disconnected', 'disconnected');
+          document.getElementById('btn-connect').disabled    = false;
+          document.getElementById('btn-disconnect').disabled = true;
+          document.getElementById('btn-mute').disabled       = true;
+        });
+
+        room.on('participantConnected', p => log('Participant joined: ' + p.identity));
+
+        room.on('trackSubscribed', (track, pub, participant) => {
+          if (track.kind !== 'audio') return;
+          const ORIGINAL_VOLUME    = 0.3;
+          const TRANSLATION_VOLUME = 1.0;
+          const myIdentity = room.localParticipant?.identity || '';
+          const trackName  = pub.trackName || track.name || '';
+
+          if (trackName.startsWith('translation-')) {
+            const target = trackName.replace('translation-', '');
+            if (target === myIdentity) {
+              log('Translation track (for me): ' + trackName);
+              const el = track.attach();
+              el.volume = TRANSLATION_VOLUME;
+              document.body.appendChild(el);
+            } else {
+              log('Skipping translation for: ' + target);
+            }
+          } else {
+            log('Audio from: ' + participant.identity + ' (vol ' + (ORIGINAL_VOLUME * 100) + '%)');
+            const el = track.attach();
+            el.volume = ORIGINAL_VOLUME;
+            document.body.appendChild(el);
+          }
+        });
+
+        const identity = 'User-' + Date.now() + ' (' + language + ')';
+        const roomName = 'translation-room';
+        const metadata = JSON.stringify({ language });
+        const token    = await buildLivekitToken(apiKey, apiSecret, roomName, identity, metadata);
+
+        await room.connect(getLivekitUrl(), token);
+        await room.localParticipant.setMicrophoneEnabled(true);
+        log('Microphone enabled');
+      } catch (err) {
+        log('Error: ' + err.message);
+        console.error(err);
+      }
+    });
+
+    document.getElementById('btn-disconnect').addEventListener('click', async () => {
+      if (room) {
+        await room.disconnect();
+        room    = null;
+        isMuted = false;
+        document.getElementById('btn-mute').textContent   = 'Mute';
+        document.getElementById('btn-mute').style.cssText = '';
+      }
+    });
+
+    document.getElementById('btn-mute').addEventListener('click', async () => {
+      if (!room) return;
+      isMuted = !isMuted;
+      await room.localParticipant.setMicrophoneEnabled(!isMuted);
+      const btn = document.getElementById('btn-mute');
+      if (isMuted) {
+        btn.textContent      = 'Unmute';
+        btn.style.background = '#f44336';
+        btn.style.color      = 'white';
+        btn.style.border     = '1px solid #f44336';
+        log('Microphone muted');
+      } else {
+        btn.textContent   = 'Mute';
+        btn.style.cssText = '';
+        log('Microphone unmuted');
+      }
+    });
+
+    log('Ready');
+  </script>
+</body>
+</html>

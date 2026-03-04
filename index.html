@@ -102,28 +102,12 @@
     </div>
   </div>
 
-  <!-- 2. LiveKit config (shown once, credentials saved to localStorage) -->
-  <div class="overlay" id="cfg-overlay" style="display:none;">
-    <div class="overlay-box">
-      <h2>⚙️ LiveKit Configuration</h2>
-      <p>Enter your LiveKit Cloud credentials. They are stored in your browser only.</p>
-      <label for="cfg-url">LiveKit URL</label>
-      <input type="text"     id="cfg-url"    placeholder="wss://your-project.livekit.cloud">
-      <label for="cfg-key">API Key</label>
-      <input type="text"     id="cfg-key"    placeholder="APIxxxxxxxxxxxxxxxxxx" autocomplete="off">
-      <label for="cfg-secret">API Secret</label>
-      <input type="password" id="cfg-secret" placeholder="••••••••••••••••••••" autocomplete="off">
-      <div class="error-msg" id="cfg-error"></div>
-      <button class="btn-primary" id="cfg-save">Save &amp; Continue</button>
-      <p class="hint">Credentials are stored in <code>localStorage</code> and never sent to any server.</p>
-    </div>
-  </div>
+
 
   <!-- 3. Main app -->
   <div id="app" style="display:none;">
     <div id="app-header">
       <h1>🌍 Translation Test</h1>
-      <button id="settings-btn">⚙️ Settings</button>
     </div>
 
     <div class="form-row">
@@ -182,59 +166,17 @@
       return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    function b64url(obj) {
-      return btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    async function buildLivekitToken(apiKey, apiSecret, roomName, identity, metadata) {
-      const header  = { alg: 'HS256', typ: 'JWT' };
-      const now     = Math.floor(Date.now() / 1000);
-      const payload = {
-        iss: apiKey, sub: identity,
-        jti: crypto.randomUUID(), nbf: now, exp: now + 3600,
-        video: { roomJoin: true, room: roomName, canPublish: true, canSubscribe: true, canPublishData: true },
-        metadata,
-      };
-      const sigInput = b64url(header) + '.' + b64url(payload);
-      const key = await crypto.subtle.importKey(
-        'raw', new TextEncoder().encode(apiSecret),
-        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(sigInput));
-      const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      return sigInput + '.' + sigB64;
-    }
-
-    function getLivekitUrl() {
-      const fromParam = new URLSearchParams(window.location.search).get('livekit_url');
-      return fromParam || localStorage.getItem('lk_url') || 'wss://my-dev-7v77lj6q.livekit.cloud';
-    }
+    // Token is fetched from the server — no client-side credential storage needed
 
     // -----------------------------------------------------------------
     // AUTH FLOW
     // -----------------------------------------------------------------
-    function showConfigOverlay() {
-      document.getElementById('cfg-url').value    = localStorage.getItem('lk_url')     || '';
-      document.getElementById('cfg-key').value    = localStorage.getItem('lk_api_key') || '';
-      document.getElementById('cfg-secret').value = '';
-      document.getElementById('cfg-overlay').style.display = 'flex';
-    }
-
     function showApp() {
       document.getElementById('auth-overlay').style.display = 'none';
-      document.getElementById('cfg-overlay').style.display  = 'none';
       document.getElementById('app').style.display          = 'block';
     }
 
-    function afterAuth() {
-      if (!localStorage.getItem('lk_api_key') || !localStorage.getItem('lk_api_secret')) {
-        showConfigOverlay();
-      } else {
-        showApp();
-      }
-    }
-
-    if (sessionStorage.getItem('authenticated') === 'true') { afterAuth(); }
+    if (sessionStorage.getItem('authenticated') === 'true') { showApp(); }
 
     document.getElementById('auth-pass').addEventListener('keydown', e => {
       if (e.key === 'Enter') document.getElementById('auth-submit').click();
@@ -246,32 +188,12 @@
       const hash = await sha256(val);
       if (hash === PASSWORD_HASH) {
         sessionStorage.setItem('authenticated', 'true');
-        document.getElementById('auth-overlay').style.display = 'none';
-        afterAuth();
+        showApp();
       } else {
         document.getElementById('auth-error').textContent = 'Incorrect password.';
         document.getElementById('auth-pass').value = '';
         document.getElementById('auth-pass').focus();
       }
-    });
-
-    document.getElementById('cfg-save').addEventListener('click', () => {
-      const url    = document.getElementById('cfg-url').value.trim();
-      const key    = document.getElementById('cfg-key').value.trim();
-      const secret = document.getElementById('cfg-secret').value.trim();
-      if (!url || !key || !secret) {
-        document.getElementById('cfg-error').textContent = 'All fields are required.';
-        return;
-      }
-      localStorage.setItem('lk_url', url);
-      localStorage.setItem('lk_api_key', key);
-      localStorage.setItem('lk_api_secret', secret);
-      showApp();
-    });
-
-    document.getElementById('settings-btn').addEventListener('click', () => {
-      showConfigOverlay();
-      document.getElementById('app').style.display = 'none';
     });
 
     // -----------------------------------------------------------------
@@ -306,12 +228,18 @@
         const LK = window.LivekitClient || window.LiveKit || window.livekit;
         if (!LK) { log('Error: LiveKit SDK not loaded'); return; }
 
-        const apiKey    = localStorage.getItem('lk_api_key');
-        const apiSecret = localStorage.getItem('lk_api_secret');
-        if (!apiKey || !apiSecret) {
-          log('Error: LiveKit credentials missing - open Settings');
-          return;
-        }
+        // Fetch token from server — no client-side secrets needed.
+        // Supports ?token_server=https://... for static hosting (e.g. GitHub Pages).
+        // Example: https://you.github.io/live-translator/?token_server=https://2sk41t5n-8080.euw.devtunnels.ms
+        const tokenServerBase = new URLSearchParams(window.location.search).get('token_server') || '';
+        const identity = 'User-' + Date.now() + ' (' + language + ')';
+        const roomName = 'translation-room';
+        const metadata = encodeURIComponent(JSON.stringify({ language }));
+        const tokenRes = await fetch(tokenServerBase + '/token?room=' + roomName + '&participant=' + encodeURIComponent(identity) + '&metadata=' + metadata);
+        if (!tokenRes.ok) { log('Error: failed to get token from server'); return; }
+        const tokenData = await tokenRes.json();
+        const token = tokenData.token;
+        const livekitUrl = tokenData.url || 'wss://my-dev-7v77lj6q.livekit.cloud';
 
         room = new LK.Room();
         room.on('connectionStateChanged', state => log('Connection state: ' + state));
@@ -361,12 +289,7 @@
           }
         });
 
-        const identity = 'User-' + Date.now() + ' (' + language + ')';
-        const roomName = 'translation-room';
-        const metadata = JSON.stringify({ language });
-        const token    = await buildLivekitToken(apiKey, apiSecret, roomName, identity, metadata);
-
-        await room.connect(getLivekitUrl(), token);
+        await room.connect(livekitUrl, token);
         await room.localParticipant.setMicrophoneEnabled(true);
         log('Microphone enabled');
       } catch (err) {

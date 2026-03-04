@@ -210,7 +210,9 @@
 
     function log(msg) {
       const el = document.getElementById('log');
-      el.innerHTML += '<div>' + new Date().toLocaleTimeString() + ' ' + msg + '</div>';
+      const entry = document.createElement('div');
+      entry.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+      el.appendChild(entry);
       el.scrollTop = el.scrollHeight;
     }
 
@@ -239,7 +241,8 @@
         if (!tokenRes.ok) { log('Error: failed to get token from server'); return; }
         const tokenData = await tokenRes.json();
         const token = tokenData.token;
-        const livekitUrl = tokenData.url || 'wss://my-dev-7v77lj6q.livekit.cloud';
+        const livekitUrl = tokenData.url;
+        if (!livekitUrl) { log('Error: token server did not return a LiveKit URL (check TRANSLATION_LIVEKIT_PUBLIC_URL env var)'); return; }
 
         room = new LK.Room();
         room.on('connectionStateChanged', state => log('Connection state: ' + state));
